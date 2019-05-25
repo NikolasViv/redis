@@ -1265,7 +1265,7 @@ func (c *ClusterClient) mapCmdsByNode(cmds []Cmder, cmdsMap *cmdsMap) error {
 		return err
 	}
 
-	cmdsAreReadOnly := c.cmdsAreReadOnly(cmds)
+	cmdsAreReadOnly := c.opt.ReadOnly && c.cmdsAreReadOnly(cmds)
 	for _, cmd := range cmds {
 		var node *clusterNode
 		var err error
@@ -1312,6 +1312,10 @@ func (c *ClusterClient) pipelineProcessCmds(
 	err = cn.WithReader(c.opt.ReadTimeout, func(rd *proto.Reader) error {
 		return c.pipelineReadCmds(node, rd, cmds, failedCmds)
 	})
+	if err == nil {
+		return nil
+	}
+
 	return err
 }
 
@@ -1329,7 +1333,9 @@ func (c *ClusterClient) pipelineReadCmds(
 			continue
 		}
 
-		if internal.IsRedisError(err) {
+		if c.opt.ReadOnly && internal.IsLoadingError(err) {
+			node.MarkAsLoading()
+		} else if internal.IsRedisError(err) {
 			continue
 		}
 
